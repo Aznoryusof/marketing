@@ -4,7 +4,7 @@ This repository contains exercises on common tasks for marketing and demand & su
 #### -- Project Status: [On Hold]
 
 ## Project Intro/Objective
-The purpose of this project is to consolidate the different ways in which marketers understand customers, forcast how their customers purchase products and services and how they respond to marketing calls. These set of tools will be useful to help businesses do better marketing to maximise its effectiveness and optimise its returns on investments. In addition, we will better understand the challenges of setting the right pricing, and optimising inventory management.
+The purpose of this project is to consolidate the different ways in which marketers understand customers, forcast how their customers purchase products and services and how they respond to marketing calls. This set of tools will be useful to help businesses do better marketing to maximise its effectiveness and optimise its returns on investments. In addition, we will better understand the challenges of setting the right pricing, and optimising inventory management.
 
 ### Methods Used
 |Method     |  Path to R markdown file   | 
