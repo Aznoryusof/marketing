@@ -1,8 +1,8 @@
 ---
 title: "Factor Analysis with R"
 output:
-  html_notebook: default
   html_document: default
+  html_notebook: default
   pdf_document: default
 ---
 
@@ -18,7 +18,7 @@ This notebook shows how to perform Factor Analysis with R and how to use the out
 The dataset includes data on ten students' performance on six tests, graded on a 100point scale. The aim of factor analysis is to reduce the dimensionality of the 10 by 6 data matrix of test scores into a smaller dimensionality (e.g., 10 by 2).  The rows in this dataset are 10 students and the columns (ie., the variables) are test scores for six subject areas: Grammar, Spelling, Composition, Algebra, Geometry, and Trigonometry.  The first analysis decision in factor analysis is to determine the number of factors to retain.  The second decision is to understand the factor structure of the data.
 
 ```{r}
-test_scores = read.csv(file = "testscoresdata.csv")
+test_scores = read.csv(file = "./data/testscoresdata.csv")
 test_scores
 ```
 
@@ -39,6 +39,13 @@ We see from this plot that the test scores group into two clusters of highly cor
 ## The eigenvalue > 1 criterion  
 
 This criterion suggests two factors.  In the output below, the first two eigenvalues are greater than 1: the first is 3.33 and the second is 2.43.  The third eigenvalue is 0.137 is less than 1.  Thus we can retain two factors.  Note that with six variables we can extract a maximum of six factors.
+
+Loose interpretation:
+- A factor is a group of variables measuring something in common
+- All the variables in factor analysis has been standardised to mean == 0 and var == 1
+- The total variability in the data is the sum of the variances, 6 * 1
+- The eigenval values is equivalent to the number of variable that are captured by the factor
+- Criterion >1 means that the group for the factor must have at least one variable
 
 
 ```{r}
@@ -62,6 +69,19 @@ nScree(test_scores[, 2:7], cor=TRUE) #This function help you determine the numbe
 ```
 
 The Kaiser criterion (nkaiser) corresponds to the eigenvalue > 1 criterion when factor analysis is applied on the correlation matrix.  The acceleration factor criterion (naf) is based on the elbow criterion in the scree plot. Parallel analysis (nparallel) and optimal coordinates (noc) are two other methods. As you can see all four criteria indicated two factors to retain. Now we are ready to run a factor analysis with two factors using the Varimax Rotated Principal Components method.
+
+What rotation means:
+https://www.theanalysisfactor.com/rotations-factor-analysis/
+
+- Factor analysis tries to summarise the data while explaining as much variability as possible
+- First, find the strongest correlations between the variables and the latent factor
+- Then, find the second set of correlations and calls it the second factor
+- The initial solution can lead to a strong correlation of a variable with several factors, or variables that has no strong correlations with any of the factors
+- Rotating the axis can make the location of the axes if the actual data points better, allowing the factors to be more interpretable
+- The different types of rotations can create factors that are correlated or uncorrelated with each other
+- Oblique rotations allow for correlation, orthogonal rotations assumes factors are uncorrelated 
+
+The eigenvalues of the correlation matrix are related to the sum of squared loadings, they tell us the variance explained by the factor
 
 
 ```{r}
@@ -202,6 +222,7 @@ ggplot(ty, aes(Verbal, Math)) +
 #and, finally, saving to your working directory
 ggsave("pca_plot_example.png", height = 8, width = 8)
 ```
+
 
 
 We can see from this map that factor 1 (the x-axis) is associated with the verbal tests and factor 2 is associated with the math tests.  We can also see that student 5 is poor on both verbal and math abilities whereas student 4 is strong on both. As the olds saying goes, a picture is worth more than 1000 words.

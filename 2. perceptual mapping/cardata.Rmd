@@ -1,8 +1,8 @@
 ---
 title: "Application of Factor Analysis on Car Perception Data"
 output:
-  html_notebook: default
   html_document: default
+  html_notebook: default
   pdf_document: default
 ---
 
@@ -15,17 +15,35 @@ This notebook shows how to perform Factor Analysis with R and how to use the out
 
 # Reading and outputing data
 
-The dataset includes data from 92 respondents regarding their perception of six sedans (Acura, BMW, Cadillac, Lexus, Lincoln, Mercedes) on six attributes (Trendy/innovative, Styling, Reliability, Sportiness, Performance, Comfort), each measured on a ten-point scale (1=low, 10=high rating). The data excerpt below shows the rating data of respondeent (ID=1).  It also shows two additional variables: The respondent education level (MBA vs. Undergrad) and his or her preference rating for each sedan (also measured) on a 10 point scale (1=low and 10=high preference).  We use this dataset to answer the following questions:
+The dataset includes data from 92 respondents regarding their perception of six sedans (Acura, BMW, Cadillac, Lexus, Lincoln, Mercedes) on six attributes (Trendy/innovative, Styling, Reliability, Sportiness, Performance, Comfort), each measured on a ten-point scale (1=low, 10=high rating). The data excerpt below shows the rating data of respondent (ID=1).  It also shows two additional variables: The respondent education level (MBA vs. Undergrad) and his or her preference rating for each sedan (also measured) on a 10 point scale (1=low and 10=high preference).  We use this dataset to answer the following questions:
 1. How many factors underly consumers' perceptions of the six sedans? What are they?
 2. Does consumer perception vary by level of education?
 3. How does consumer perception impact consumer preference for cars?
 
 To answer these questions, we first apply factor analysis on the attribute rating data to derive the factors and construct a perceptual map. We then compare the maps of MBA and undergraduate students to see if they are different.  Finally, we will run a regression where preference is the dependent variables and the factor scores are the independent variables.  The regression output will reveal the relative importance of the factors in preduicting consumer preference for cars.
 
+Steps to conducting factor analysis:
+1. Determine the number of factors
+2. Use rotated factor loadings to interpret the factor structure
+3. Save the factor scores
+
 ```{r}
-cardata = read.csv(file = "cardata.csv")
+cardata = read.csv(file = "./data/cardata.csv")
 head(cardata)
 ```
+
+
+The correlations between unrelated variables such as trendy / styling and performance and comfort are high possibly due to the Halo effect where respondents are more likely to rate things they like high on all areas and rate things that they dislike low on all areas.
+
+This may result in masking of the factor structure when conducting factor analysis.
+
+
+```{r}
+library(psych)
+corPlot(cardata[,4:9], numbers = TRUE, upper = FALSE, diag = FALSE)
+
+```
+
 
 The first analysis decision in factor analysis is to determine the number of factors to retain.  The second decision is to understand the factor structure of the data.
 
@@ -42,14 +60,23 @@ nScree(cardata[,4:9], cor=TRUE) #This function help you determine the number of 
 
 The Kaiser criterion (nkaiser) corresponds to the eigenvalue > 1 criterion when factor analysis is applied on the correlation matrix.  The acceleration factor criterion (naf) is based on the elbow criterion in the scree plot. Parallel analysis (nparallel) and optimal coordinates (noc) are two other methods. As you can see all four criteria indicated one factor to retain. 
 
-The decision of how many factors also involves judgement on the part of the marketing analyst.  It hinges on what the analyst wants to highlight from the data. It is quite possible that one factor may fail to portray important information in the data.  In such a case, it is worthwile to run factor analysis, say from 1 to 5 factors (without Varimax rotation), to see how much variance it is explained as we extract varying number of factors.  We do this analysis below.
+However, fitting the eigenvalues, we find that the first factor has 3.8 which explains 3.87 of the variance. The second factor is 0.93, which is borderline, and is close to 1. May want to look at two factors.
 
 ```{r}
-fit <- principal(cardata[,4:9], nfactors=5, rotate="none")
+eigenval = eigen(cor(cardata[,4:9]))
+eigenval$values #print the eigen values of the correlation matrix
+```
+
+
+The decision of how many factors also involves judgement on the part of the marketing analyst.  It hinges on what the analyst wants to highlight from the data. It is quite possible that one factor may fail to portray important information in the data.  In such a case, it is worthwile to run factor analysis, say from 1 to 5 factors (without Varimax rotation), to see how much variance it is explained as we extract varying number of factors. We do this analysis below.
+
+```{r}
+fit <- principal(cardata[,4:9], nfactors=5, rotate="none") # use none to investigate, before using varimax rotation
 fit$loadings
 ```
 
-The SS loadings in the bottom panel of the output above are the eigenvalues of the correlation matrix. The eigenvalue criterion (eigenvalue less than one) suggests one factor.  However, the second eigenvalue (=0.935) is close to one, suggesting that factor 2 may have important information.  The cumulative Var criterion suggests that one factor captures 64.5% of the variance of the data; two factors explain 80.1% of thew data; and three factors capture 88% of the data.  However, the improvement from three to four factors is very marginal.  The fourth factor explains only 4.7% of the variance.  This analysis suggests that a two- or three-factor solution is worthwile examining.  Let's look at a rotated three-factor solution.
+
+The SS loadings in the bottom panel of the output above are the eigenvalues of the correlation matrix. The eigenvalue criterion (eigenvalue less than one) suggests one factor.  However, the second eigenvalue (=0.935) is close to one, suggesting that factor 2 may have important information.  The cumulative Var criterion suggests that one factor captures 64.5% of the variance of the data; two factors explain 80.1% of the data; and three factors capture 88% of the data.  However, the improvement from three to four factors is very marginal.  The fourth factor explains only 4.7% of the variance.  This analysis suggests that a two- or three-factor solution is worthwile examining.  Let's look at a rotated three-factor solution.
 
 
 ```{r}
@@ -64,7 +91,15 @@ colnames(fit$weights) = c("Appearance", "Performance", "Comfort") # Naming the f
 fit$weights #printing the factor weights
 ```
 
-The factor weights show how the factor scores are obtained.  For example, the scores on factor 1 are obtained as follows:
+This shows how the factors should be represented on the new axis.
+
+```{r}
+as.data.frame(unclass(fit$loadings) * 3)
+
+#ty_car[(nrow(ty_car)-5):nrow(ty_car),]
+```
+
+The factor weights show how the factor scores are obtained. For example, the scores on factor 1 are obtained as follows:
 Appearance=0.45Trendy + 0.40Styling + ... -0.09Comfort
 
 Note that all the attribute ratings are standardized to mean zero and unit variance when computing the factor scores.  In such a case, each factor will also be standardized.
@@ -85,6 +120,80 @@ brand.mean=aggregate(reduced_data[,c(4:6)], by=list(Brand), FUN=mean, na.rm=TRUE
 detach(reduced_data)
 head(brand.mean)
 ```
+
+
+
+# Two dimensional perceptual map
+```{r}
+
+library(ggplot2)
+library(ggrepel)
+
+
+fit <- principal(cardata[,4:9], nfactors = 3, rotate="varimax")
+
+#extracting scores and loadings info from "fit" object, and binding them together in order to plot together
+ty_car = rbind(as.data.frame(unclass(fit$scores)),
+               (as.data.frame(unclass(fit$loadings))
+                #*3
+                )) #multiplied by scalar for plot 
+
+colnames(ty_car) = c("Appearance", "Performance", "Comfort")
+
+
+ggplot(brand.mean, aes(Appearance, Performance)) +
+  #first, the scores  
+  
+  #for the students, we will restrict the referenced data to only the first 10 rows of ty (the last 6 are classes).
+  #rather than plotting points ('geom_point()'), we are plotting the text, hence the use of the geom_text function
+  geom_text(data = brand.mean,
+            aes(x = brand.mean[,2],
+                y = brand.mean[,3],
+                label = brand.mean[,1]))  +
+  
+  scale_y_continuous(limits = c(-1.5, 1.5)
+                     #, sec.axis = sec_axis(~./2, name = "Performance")
+                     ) +
+  scale_x_continuous(limits = c(-1.5, 1.5),
+                     #, sec.axis = sec_axis(~./2, name = "Appearance")
+                     ) +
+  #the below is purely to make the plot look better, setting colors, typeface, etc.
+  theme_classic() +
+  theme(axis.text.x.top = element_text(color = "red"),
+        axis.text.y.right =  element_text(color = "red"),
+        plot.title = element_text(face = "bold",hjust = 0.5)) +
+  geom_hline(yintercept = 0, linetype = "dotted", alpha = .4) +
+  geom_vline(xintercept = 0, linetype = "dotted", alpha = .4) +
+  
+  #now we do loadings! referencing a subset of row vectors that correspond to the loadings data
+  
+  #plotting 'segments' as the line one can draw between the origin and the point
+  geom_segment(data=ty_car[(nrow(ty_car)-5):nrow(ty_car),],
+               aes(x = ty_car[(nrow(ty_car)-5):nrow(ty_car),1],
+                   y =ty_car[(nrow(ty_car)-5):nrow(ty_car),2]),
+               xend=0,
+               yend=0,
+               arrow = arrow(length = unit(0.03, "npc"),
+                             ends = "first"),
+               color = "red") + 
+  #'smart labels' that won't overlap with each other
+  geom_label_repel(data=ty_car[(nrow(ty_car)-5):nrow(ty_car),],
+                   aes(x = ty_car[(nrow(ty_car)-5):nrow(ty_car),1],
+                       y = ty_car[(nrow(ty_car)-5):nrow(ty_car),2],
+                       label = rownames(ty_car[(nrow(ty_car)-5):nrow(ty_car),])),
+                   label = rownames(ty_car[(nrow(ty_car)-5):nrow(ty_car),]),
+                   segment.alpha = .25,
+                   box.padding = unit(0.35, "lines"),
+                   segment.color = "grey50")
+
+  #setting a title
+  ggtitle("Perceptual Map\n")
+  
+#and, finally, saving to your working directory
+ggsave("pca_plot_example.png", height = 8, width = 8)
+
+```
+
 
 We are now ready to produce a three-dimensional perceptual map of the cars.
 
@@ -151,4 +260,9 @@ regfit <- lm(Preference ~ Appearance + Performance + Comfort, data=red_data)
 summary(regfit) # show results
 ```
 
-The regression output suggests that car Appearance is the most important driver of student preference for cars ($\beta=1.56; \ p,0.01$), followed by Performance ($\beta=1.10; \ p,0.01$), and Comfort ($\beta=0.53; \ p,0.01$). Cadillac, for example, should improve its appearance (e.g., styling) and perormance if it wants to have a better appeal in this market segment. The R-Squared for this regression is only 18.99%.  This suggests that there are other drivers of preference beyond consumer perception (e.g., price). 
+The regression output suggests that car Appearance is the most important driver of student preference for cars ($\beta=1.56; \ p,0.01$), followed by Performance ($\beta=1.10; \ p,0.01$), and Comfort ($\beta=0.53; \ p,0.01$). Cadillac, for example, should improve its appearance (e.g., styling) and perormance if it wants to have a better appeal in this market segment. The R-Squared for this regression is only 18.99%.  This suggests that there are other drivers of preference beyond consumer perception (e.g., price). Other variables such as the demographics such as income, education, and gender.
+
+The advantage of doing factor analysis, before carrying out linear regression is that it reduces the problem of multi-collinearity.
+
+
+
