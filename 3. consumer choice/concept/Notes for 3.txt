@@ -1,0 +1,2 @@
+negative means that as the income increases, the utility from taking the train drops relative to taking the plane.
+High income person rather take the plane than train holding everything else constant. The other two values are not significant.

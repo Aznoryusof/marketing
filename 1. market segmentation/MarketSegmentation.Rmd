@@ -33,7 +33,12 @@ In order to run these statistical methods, you need to install these R packages:
 set.seed(1990)
 library(NbClust)
 library(mclust)
+library(dbscan)
 library(gmodels)
+library(here)
+library(tidyverse)
+library(cluster)
+library(Rtsne)
 ```
 
 
@@ -105,8 +110,9 @@ We start by 4 clusters as we see below:
 set.seed(1990)
 clust <- hclust(dist, method = "ward.D2")
 plot(clust)
-h_cluster <- cutree(clust, 4)
 rect.hclust(clust, k=4, border="red")
+h_cluster <- cutree(clust, 4)
+
 ```
 
 Let us now look at some description of this clustering. The table below informs us with the number of individuals in each cluster:
@@ -297,4 +303,224 @@ CrossTable(h_cluster,lca_clusters,prop.chisq = FALSE, prop.r = T, prop.c = T,
 ```{r,warning=FALSE}
 CrossTable(Kmean_Cluster,lca_clusters,prop.chisq = FALSE, prop.r = T, prop.c = T,
            prop.t = F,chisq = T)
+```
+
+
+# HDBSCAN
+
+references:
+https://hdbscan.readthedocs.io/en/latest/how_hdbscan_works.html
+https://cran.r-project.org/web/packages/dbscan/vignettes/hdbscan.html
+
+```{r}
+
+# for (pts in 2:20) {
+#   hdbscan_clust <- hdbscan(std_seg_data, minPts = pts)
+#   print(hdbscan_clust)
+#   plot(hdbscan_clust$hc, main = paste0("minPts: ", pts))
+#   try(plot(hdbscan_clust, show_flat = T))
+# }
+
+minPts = 2
+
+hdbscan_clust_final <- hdbscan(std_seg_data, minPts = minPts)
+print(hdbscan_clust_final)
+plot(hdbscan_clust_final$hc, main = paste0("minPts: ", minPts))
+plot(hdbscan_clust_final, show_flat = T)
+```
+
+```{r}
+hdbscan_clusters <- hdbscan_clust_final$cluster
+hdbscan_summary <- aggregate(std_seg_data[,c("Trendy", "Styling", "Reliability", "Sportiness", "Performance", "Comfort")],by=list(hdbscan_clusters),FUN=mean)
+hdbscan_summary
+
+# lca_clusters<-factor(lca_clusters,levels = c(1,2),
+#                     labels = c("Reliability LCA", "Comfort LCA"))
+
+```
+
+
+```{r}
+CrossTable(seg_data$MBA,hdbscan_clust_final$cluster,prop.chisq = FALSE, prop.r = T, prop.c = T,
+           prop.t = F,chisq = T)
+
+CrossTable(h_cluster,hdbscan_clust_final$cluster,prop.chisq = FALSE, prop.r = T, prop.c = T,
+           prop.t = F,chisq = T)
+```
+
+# Clustering Mixed data types
+
+Reference:
+https://towardsdatascience.com/clustering-on-mixed-type-data-8bbd0a2569c3
+https://distill.pub/2016/misread-tsne/
+
+
+```{r}
+
+# Compute Gower distance
+gower_dist <- daisy(seg_data, metric = "gower")
+gower_mat <- as.matrix(gower_dist)
+
+# Print most similar respondents
+seg_data[which(gower_mat == min(gower_mat[gower_mat != min(gower_mat)]), arr.ind = TRUE)[1, ], ]
+
+#' Print most dissimilar respondents
+seg_data[which(gower_mat == max(gower_mat[gower_mat != max(gower_mat)]), arr.ind = TRUE)[1, ], ]
+
+# Evaluate the number of clusters
+# 5 and 7 has the highest sil width; but 5 is simpler so pick 5
+sil_width <- c(NA)
+for(i in 2:8){  
+  pam_fit <- pam(gower_dist, diss = TRUE, k = i)  
+  sil_width[i] <- pam_fit$silinfo$avg.width  
+}
+
+plot(1:8, sil_width,
+     xlab = "Number of clusters",
+     ylab = "Silhouette Width")
+lines(1:8, sil_width)
+
+# Summary of each cluster
+k <- 5
+pam_fit <- pam(gower_dist, diss = TRUE, k)
+pam_results <- seg_data %>%
+  mutate(cluster = pam_fit$clustering) %>%
+  group_by(cluster) %>%
+  do(the_summary = summary(.))
+
+pam_results$the_summary
+
+# Visualise in a lower dimension space
+
+tsne_obj <- Rtsne(gower_dist, is_distance = TRUE, perplexity = 22)
+
+tsne_data <- tsne_obj$Y %>%
+  data.frame() %>%
+  setNames(c("X", "Y")) %>%
+  mutate(cluster = factor(pam_fit$clustering))
+
+ggplot(aes(x = X, y = Y), data = tsne_data) +
+  geom_point(aes(color = cluster))
+```
+
+
+
+# Clustering Pipeline
+
+The above can be encapsulated in the following pipeline:
+
+
+```{r}
+
+load_data <- function(path) {
+  read.csv(file = path, row.names=1) %>% return()
+}
+
+
+prepare_data <- function(df) {
+  # Selects only the numeric values
+  numeric_cols <- map_lgl(df, is.numeric)
+  df_numeric <- df[numeric_cols]
+  df_scaled <- scale(df_numeric)
+  
+  return(df_scaled)
+}
+
+
+nb_clust <- function(df_scaled, method) {
+  result <- df_scaled[1:(length(df_scaled) - 1)] %>% 
+    NbClust(min.nc=3, max.nc=15, index="all", method=method)
+  nb <- result$Best.partition %>% 
+    unique() %>% 
+    length()
+  
+  return(nb)
+}
+
+
+generate_k <- function(df_scaled, type, auto_k, k) {
+  if (auto_k == FALSE && !is.null(k)) {
+    k_final <- k
+  } else if (auto_k == FALSE && is.null(k)) {
+    cat("Parameter auto_k indicated as FALSE, please provide a k value to run the clustering analysis.", "\n")
+    stop()
+  } else {
+    switch(type,
+      h_clust = k_final <- nb_clust(df_scaled, method="ward.D2"),
+      k_means = k_final <- nb_clust(df_scaled, method="kmeans")
+    )
+  }
+  return (k_final)
+}
+
+
+h_clust <- function(df_scaled, nb, seed, col_names) {
+  set.seed(seed)
+  dist <- dist(df_scaled, method = "euclidean")
+  # Create cluster linkages and cut by nb of clusters
+  clust <- hclust(dist, method = "ward.D2")
+  h_cluster <- cutree(clust, nb)
+  # Plot linkages and add boxes for nb of cluster
+  plot(clust)
+  rect.hclust(clust, k=nb, border="red")
+  
+  return(h_cluster)
+}
+
+
+k_means <- function(df_scaled, nb, seed, k, col_names) {
+  set.seed(seed)
+  k_means_cluster <- kmeans(df_scaled, nb, iter.max=100, nstart=100)
+  
+  return(k_means_cluster)
+}
+
+# This is the main clustering function
+cluster <- function(df_scaled, type, seed, auto_k, k=NULL, col_names=NULL) {
+  # Generate final k to use
+  k_final <- generate_k(df_scaled, type, auto_k, k)
+  # Run the clustering
+  switch(type,
+    h_clust = {
+      result <- h_clust(df_scaled, k_final, seed, col_names)
+    },
+    k_means = {
+      result <- k_means(df_scaled, k_final, seed, col_names)
+      result <- result$cluster
+    }
+  )
+
+  return(result)
+}
+
+# Options: h_clust | k_means
+
+hclust <- load_data("./data/SegmentationData.csv") %>%
+  prepare_data() %>%
+  cluster("h_clust", seed=1990, auto_k = TRUE)
+
+
+kmeans <- load_data("./data/SegmentationData.csv") %>%
+  prepare_data() %>%
+  cluster("k_means", seed=1990, auto_k = TRUE)
+
+
+hclust_k3 <- load_data("./data/SegmentationData.csv") %>%
+  prepare_data() %>%
+  cluster("h_clust", seed=1990, auto_k = FALSE, k = 3)
+
+
+kmeans_k3 <- load_data("./data/SegmentationData.csv") %>%
+  prepare_data() %>%
+  cluster("k_means", seed=1990, auto_k = FALSE, k = 3)
+
+```
+
+```{r}
+load_data("./data/SegmentationData.csv") %>%
+  prepare_data() %>%
+  cluster("h_clust", seed=1990, auto_k = TRUE) %>% 
+  table()
+
+
 ```
